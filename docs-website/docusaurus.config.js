@@ -6,6 +6,7 @@ module.exports = {
   tagline: "A Metadata Platform for the Modern Data Stack",
   url: process.env.DOCUSAURUS_CONFIG_URL || "https://laulpogan.github.io",
   baseUrl: process.env.DOCUSAURUS_CONFIG_BASE_URL || "/datahubSitePreview/",
+
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "throw",
   favicon: "img/favicon.ico",
