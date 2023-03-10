@@ -8,7 +8,8 @@ from pydantic.class_validators import root_validator
 
 import datahub.emitter.mce_builder as builder
 from datahub.configuration.common import AllowDenyPattern
-from datahub.configuration.source_common import DEFAULT_ENV
+from datahub.configuration.source_common import DEFAULT_ENV, DatasetSourceConfigMixin
+from datahub.ingestion.source.common.subtypes import BIAssetSubTypes
 from datahub.ingestion.source.state.stale_entity_removal_handler import (
     StaleEntityRemovalSourceReport,
     StatefulStaleMetadataRemovalConfig,
@@ -74,6 +75,7 @@ class Constant:
     HTTP_RESPONSE_STATUS_CODE = "HttpResponseStatusCode"
     NAME = "name"
     DISPLAY_NAME = "displayName"
+    CURRENT_VALUE = "currentValue"
     ORDER = "order"
     IDENTIFIER = "identifier"
     EMAIL_ADDRESS = "emailAddress"
@@ -97,7 +99,7 @@ class Constant:
     EXPRESSION = "expression"
     SOURCE = "source"
     PLATFORM_NAME = "powerbi"
-    REPORT_TYPE_NAME = "Report"
+    REPORT_TYPE_NAME = BIAssetSubTypes.REPORT
     CHART_COUNT = "chartCount"
     WORKSPACE_NAME = "workspaceName"
     DATASET_WEB_URL = "datasetWebUrl"
@@ -139,7 +141,9 @@ class PlatformDetail:
     )
 
 
-class PowerBiDashboardSourceConfig(StatefulIngestionConfigBase):
+class PowerBiDashboardSourceConfig(
+    StatefulIngestionConfigBase, DatasetSourceConfigMixin
+):
     platform_name: str = pydantic.Field(
         default=Constant.PLATFORM_NAME, hidden_from_docs=True
     )

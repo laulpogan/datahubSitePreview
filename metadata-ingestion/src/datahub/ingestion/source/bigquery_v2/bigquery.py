@@ -60,6 +60,10 @@ from datahub.ingestion.source.bigquery_v2.lineage import (
 )
 from datahub.ingestion.source.bigquery_v2.profiler import BigqueryProfiler
 from datahub.ingestion.source.bigquery_v2.usage import BigQueryUsageExtractor
+from datahub.ingestion.source.common.subtypes import (
+    DatasetContainerSubTypes,
+    DatasetSubTypes,
+)
 from datahub.ingestion.source.sql.sql_utils import (
     add_table_to_schema_container,
     gen_database_container,
@@ -143,7 +147,11 @@ def cleanup(config: BigQueryV2Config) -> None:
 @platform_name("BigQuery", doc_order=1)
 @config_class(BigQueryV2Config)
 @support_status(SupportStatus.CERTIFIED)
-@capability(SourceCapability.PLATFORM_INSTANCE, "Enabled by default")
+@capability(
+    SourceCapability.PLATFORM_INSTANCE,
+    "Not supported since BigQuery project ids are globally unique",
+    supported=False,
+)
 @capability(SourceCapability.DOMAINS, "Supported via the `domain` config field")
 @capability(SourceCapability.CONTAINERS, "Enabled by default")
 @capability(SourceCapability.SCHEMA_METADATA, "Enabled by default")
@@ -455,7 +463,7 @@ class BigqueryV2Source(StatefulIngestionSourceBase, TestableSource):
         yield from gen_database_container(
             database=database,
             name=database,
-            sub_types=["Project"],
+            sub_types=[DatasetContainerSubTypes.BIGQUERY_PROJECT],
             domain_registry=self.domain_registry,
             domain_config=self.config.domain,
             report=self.report,
@@ -463,16 +471,19 @@ class BigqueryV2Source(StatefulIngestionSourceBase, TestableSource):
         )
 
     def gen_dataset_containers(
-        self, dataset: str, project_id: str
+        self, dataset: str, project_id: str, tags: Optional[Dict[str, str]] = None
     ) -> Iterable[MetadataWorkUnit]:
         schema_container_key = self.gen_dataset_key(project_id, dataset)
 
+        tags_joined: Optional[List[str]] = None
+        if tags and self.config.capture_dataset_label_as_tag:
+            tags_joined = [f"{k}:{v}" for k, v in tags.items()]
         database_container_key = self.gen_project_id_key(database=project_id)
 
         yield from gen_schema_container(
             database=project_id,
             schema=dataset,
-            sub_types=["Dataset"],
+            sub_types=[DatasetContainerSubTypes.BIGQUERY_DATASET],
             domain_registry=self.domain_registry,
             domain_config=self.config.domain,
             report=self.report,
@@ -483,6 +494,7 @@ class BigqueryV2Source(StatefulIngestionSourceBase, TestableSource):
             )
             if self.config.include_external_url
             else None,
+            tags=tags_joined,
         )
 
     def get_workunits_internal(self) -> Iterable[MetadataWorkUnit]:
@@ -739,8 +751,7 @@ class BigqueryV2Source(StatefulIngestionSourceBase, TestableSource):
         dataset_name = bigquery_dataset.name
 
         yield from self.gen_dataset_containers(
-            dataset_name,
-            project_id,
+            dataset_name, project_id, bigquery_dataset.labels
         )
 
         columns = BigQueryDataDictionary.get_columns_for_dataset(
@@ -911,11 +922,11 @@ class BigqueryV2Source(StatefulIngestionSourceBase, TestableSource):
             custom_properties["max_partition_id"] = str(table.max_partition_id)
             custom_properties["is_partitioned"] = str(True)
 
-        sub_types: List[str] = ["table"]
+        sub_types: List[str] = [DatasetSubTypes.TABLE]
         if table.max_shard_id:
             custom_properties["max_shard_id"] = str(table.max_shard_id)
             custom_properties["is_sharded"] = str(True)
-            sub_types = ["sharded table", "table"]
+            sub_types = ["sharded table"] + sub_types
 
         tags_to_add = None
         if table.labels and self.config.capture_table_label_as_tag:
@@ -946,7 +957,7 @@ class BigqueryV2Source(StatefulIngestionSourceBase, TestableSource):
             columns=columns,
             project_id=project_id,
             dataset_name=dataset_name,
-            sub_types=["view"],
+            sub_types=[DatasetSubTypes.VIEW],
         )
 
         view = cast(BigqueryView, table)

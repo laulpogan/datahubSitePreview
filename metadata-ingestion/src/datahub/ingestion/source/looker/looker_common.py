@@ -22,18 +22,19 @@ from typing import (
 
 import pydantic
 from looker_sdk.error import SDKError
-from looker_sdk.sdk.api31.models import User, WriteQuery
+from looker_sdk.sdk.api40.models import User, WriteQuery
 from pydantic import Field
 from pydantic.class_validators import validator
 
 import datahub.emitter.mce_builder as builder
 from datahub.configuration import ConfigModel
 from datahub.configuration.common import ConfigurationError
-from datahub.configuration.source_common import DatasetSourceConfigBase
+from datahub.configuration.source_common import DatasetSourceConfigMixin
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.emitter.mcp_builder import create_embed_mcp
 from datahub.ingestion.api.report import Report
 from datahub.ingestion.api.source import SourceReport
+from datahub.ingestion.source.common.subtypes import DatasetSubTypes
 from datahub.ingestion.source.looker.looker_lib_wrapper import LookerAPI
 from datahub.ingestion.source.sql.sql_types import (
     POSTGRES_TYPES_MAP,
@@ -161,7 +162,7 @@ class LookerNamingPattern(NamingPattern):
     ALLOWED_VARS = [field.name for field in dataclasses.fields(NamingPatternMapping)]
 
 
-class LookerCommonConfig(DatasetSourceConfigBase):
+class LookerCommonConfig(DatasetSourceConfigMixin):
     explore_naming_pattern: LookerNamingPattern = pydantic.Field(
         description=f"Pattern for providing dataset names to explores. {LookerNamingPattern.allowed_docstring()}",
         default=LookerNamingPattern(pattern="{model}.explore.{name}"),
@@ -894,7 +895,7 @@ class LookerExplore:
             changeType=ChangeTypeClass.UPSERT,
             entityUrn=dataset_snapshot.urn,
             aspectName="subTypes",
-            aspect=SubTypesClass(typeNames=["explore"]),
+            aspect=SubTypesClass(typeNames=[DatasetSubTypes.LOOKER_EXPLORE]),
         )
 
         proposals: List[Union[MetadataChangeEvent, MetadataChangeProposalWrapper]] = [
@@ -1048,7 +1049,7 @@ class LookerDashboardSourceReport(StaleEntityRemovalSourceReport):
 
 @dataclass
 class LookerUser:
-    id: int
+    id: str
     email: Optional[str]
     display_name: Optional[str]
     first_name: Optional[str]
@@ -1166,7 +1167,7 @@ class LookerUserRegistry:
     def __init__(self, looker_api: LookerAPI):
         self.looker_api_wrapper = looker_api
 
-    def get_by_id(self, id_: int) -> Optional[LookerUser]:
+    def get_by_id(self, id_: str) -> Optional[LookerUser]:
         logger.debug(f"Will get user {id_}")
 
         raw_user: Optional[User] = self.looker_api_wrapper.get_user(
